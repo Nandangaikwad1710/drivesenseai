@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DriveSense AI — Automotive OBD-II Telemetry Cockpit</title>
+    <meta name="description" content="Next-generation automotive digital cockpit and real-time OBD-II telemetry telemetry analyzer for DriveSense OBD Bluetooth devices.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark">
+    <div class="app-container">
+        <!-- Top Navigation & Connection Status -->
+        <header class="app-header">
+            <div class="brand-section">
+                <div class="brand-logo">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1 class="brand-title">DRIVESENSE <span>AI</span></h1>
+                    <span class="brand-subtitle">OBD-II Bluetooth Telemetry</span>
+                </div>
+            </div>
+
+            <div class="header-center-pill">
+                <div class="status-indicator-wrap">
+                    <span class="pulse-dot" id="connection-dot"></span>
+                    <span class="status-label" id="connection-status-text">DISCONNECTED</span>
+                </div>
+                <div class="telemetry-rate-badge" id="telemetry-rate-badge">0 Hz</div>
+            </div>
+
+            <div class="header-actions">
+                <button class="btn-toggle-sim" id="btn-toggle-sim" title="Switch between physical Bluetooth ESP32 and Virtual Simulator">
+                    <span class="sim-icon">⚡</span>
+                    <span class="sim-label">Virtual ESP32: <strong id="sim-state-text">OFF</strong></span>
+                </button>
+
+                <button class="btn-primary btn-ble-connect" id="btn-connect">
+                    <svg class="ble-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M7 7l10 10-5 5V2l5 5L7 17"></path>
+                    </svg>
+                    <span id="btn-connect-label">Connect Device</span>
+                </button>
+
+                <button class="btn-icon" id="btn-open-terminal" title="OBD Diagnostic Console">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard View -->
+        <main class="cockpit-dashboard">
+            <!-- Top HUD Metrics Strip -->
+            <section class="hud-strip">
+                <div class="hud-card">
+                    <span class="hud-label">TRIP TIME</span>
+                    <span class="hud-value" id="hud-trip-time">00:00:00</span>
+                    <span class="hud-sub">Active Session</span>
+                </div>
+                <div class="hud-card">
+                    <span class="hud-label">DISTANCE</span>
+                    <div class="hud-val-unit">
+                        <span class="hud-value" id="hud-trip-distance">0.0</span>
+                        <span class="hud-unit">km</span>
+                    </div>
+                    <span class="hud-sub">GPS / Wheel Est.</span>
+                </div>
+                <div class="hud-card">
+                    <span class="hud-label">AVG SPEED</span>
+                    <div class="hud-val-unit">
+                        <span class="hud-value" id="hud-avg-speed">0</span>
+                        <span class="hud-unit">km/h</span>
+                    </div>
+                    <span class="hud-sub">Peak: <span id="hud-peak-speed">0</span> km/h</span>
+                </div>
+                <div class="hud-card">
+                    <span class="hud-label">EST. FUEL RATE</span>
+                    <div class="hud-val-unit">
+                        <span class="hud-value" id="hud-fuel-rate">--</span>
+                        <span class="hud-unit">L/100km</span>
+                    </div>
+                    <span class="hud-sub">From MAF Stream</span>
+                </div>
+                <div class="hud-card eco-score-card">
+                    <span class="hud-label">ECO SCORE</span>
+                    <div class="eco-score-display">
+                        <div class="eco-radial-wrap">
+                            <svg class="eco-radial-svg" viewBox="0 0 36 36">
+                                <path class="eco-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="eco-progress" id="eco-progress-arc" stroke-dasharray="85, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            </svg>
+                            <span class="eco-number" id="eco-score-number">--</span>
+                        </div>
+                        <div class="eco-text">
+                            <span class="eco-status" id="eco-status-text">Analyzing</span>
+                            <span class="hud-sub" id="eco-sub-text">Driving Cycle</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Center Gauge Cluster -->
+            <section class="gauge-cluster-section">
+                <!-- Speedometer Dial -->
+                <div class="gauge-card speedometer-card">
+                    <div class="gauge-header">
+                        <span class="gauge-tag">VEHICLE SPEED</span>
+                        <div class="unit-toggle" id="unit-toggle" title="Click to toggle km/h and mph">
+                            <span class="unit-opt active" data-unit="kmh">KM/H</span>
+                            <span class="unit-opt" data-unit="mph">MPH</span>
+                        </div>
+                    </div>
+                    <div class="gauge-canvas-container">
+                        <canvas id="canvas-speedometer" width="340" height="340"></canvas>
+                        <div class="gauge-center-readout">
+                            <span class="gauge-digital-val" id="digital-speed">0</span>
+                            <span class="gauge-digital-unit" id="digital-speed-unit">KM/H</span>
+                        </div>
+                    </div>
+                    <div class="gauge-footer-meta">
+                        <span class="support-badge supported" id="speed-support-badge">MODE 01 · PID 0D</span>
+                    </div>
+                </div>
+
+                <!-- Center AI Driving Insights -->
+                <div class="center-ai-column">
+                    <div class="ai-insight-card">
+                        <div class="ai-card-header">
+                            <div class="ai-badge">
+                                <span class="ai-sparkle">✦</span>
+                                <span>DRIVESENSE AI</span>
+                            </div>
+                            <span class="live-pill">LIVE ANALYTICS</span>
+                        </div>
+                        <div class="ai-speech-bubble" id="ai-insight-text">
+                            Waiting for vehicle telemetry connection. Start the engine or switch on Virtual ESP32 to begin trip telemetry.
+                        </div>
+                        <div class="ai-metric-breakdown">
+                            <div class="ai-bar-group">
+                                <div class="ai-bar-label">
+                                    <span>Acceleration Smoothness</span>
+                                    <span id="score-accel-val">88%</span>
+                                </div>
+                                <div class="ai-progress-track">
+                                    <div class="ai-progress-fill" id="score-accel-bar" style="width: 88%;"></div>
+                                </div>
+                            </div>
+                            <div class="ai-bar-group">
+                                <div class="ai-bar-label">
+                                    <span>Throttle Stability</span>
+                                    <span id="score-throttle-val">92%</span>
+                                </div>
+                                <div class="ai-progress-track">
+                                    <div class="ai-progress-fill" id="score-throttle-bar" style="width: 92%;"></div>
+                                </div>
+                            </div>
+                            <div class="ai-bar-group">
+                                <div class="ai-bar-label">
+                                    <span>Thermal Efficiency</span>
+                                    <span id="score-thermal-val">Normal</span>
+                                </div>
+                                <div class="ai-progress-track">
+                                    <div class="ai-progress-fill success" id="score-thermal-bar" style="width: 75%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stream Control Quick Bar -->
+                    <div class="quick-controls-card">
+                        <button class="btn-stream-action btn-start-stream" id="btn-stream-start">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <span>Start Telemetry</span>
+                        </button>
+                        <button class="btn-stream-action btn-stop-stream" id="btn-stream-stop" disabled>
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12"></rect>
+                            </svg>
+                            <span>Stop Stream</span>
+                        </button>
+                        <button class="btn-stream-action btn-query-info" id="btn-device-info">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <span>ECU Info</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tachometer Dial -->
+                <div class="gauge-card tachometer-card">
+                    <div class="gauge-header">
+                        <span class="gauge-tag">ENGINE SPEED</span>
+                        <span class="rpm-x1000-label">RPM × 1000</span>
+                    </div>
+                    <div class="gauge-canvas-container">
+                        <canvas id="canvas-tachometer" width="340" height="340"></canvas>
+                        <div class="gauge-center-readout">
+                            <span class="gauge-digital-val" id="digital-rpm">0</span>
+                            <span class="gauge-digital-unit">RPM</span>
+                        </div>
+                    </div>
+                    <div class="gauge-footer-meta">
+                        <span class="support-badge supported" id="rpm-support-badge">MODE 01 · PID 0C</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Auxiliary Telemetry Parameters Grid -->
+            <section class="telemetry-grid">
+                <!-- Throttle Position -->
+                <div class="param-card" id="card-throttle">
+                    <div class="param-top">
+                        <span class="param-name">THROTTLE POSITION</span>
+                        <span class="param-pid">PID 11</span>
+                    </div>
+                    <div class="param-main">
+                        <span class="param-value" id="val-throttle">0.0</span>
+                        <span class="param-unit">%</span>
+                    </div>
+                    <div class="param-bar-wrap">
+                        <div class="param-bar-fill" id="bar-throttle" style="width: 0%;"></div>
+                    </div>
+                    <div class="param-meta">
+                        <span class="support-badge" id="throttle-support">SUPPORTED</span>
+                        <span class="param-sub" id="throttle-sub">0 - 100%</span>
+                    </div>
+                </div>
+
+                <!-- Engine Load -->
+                <div class="param-card" id="card-load">
+                    <div class="param-top">
+                        <span class="param-name">ENGINE LOAD</span>
+                        <span class="param-pid">PID 04</span>
+                    </div>
+                    <div class="param-main">
+                        <span class="param-value" id="val-load">0.0</span>
+                        <span class="param-unit">%</span>
+                    </div>
+                    <div class="param-bar-wrap">
+                        <div class="param-bar-fill" id="bar-load" style="width: 0%;"></div>
+                    </div>
+                    <div class="param-meta">
+                        <span class="support-badge" id="load-support">SUPPORTED</span>
+                        <span class="param-sub" id="load-sub">Calculated ECU Load</span>
+                    </div>
+                </div>
+
+                <!-- Coolant Temperature -->
+                <div class="param-card" id="card-coolant">
+                    <div class="param-top">
+                        <span class="param-name">COOLANT TEMP</span>
+                        <span class="param-pid">PID 05</span>
+                    </div>
+                    <div class="param-main">
+                        <span class="param-value" id="val-coolant">--</span>
+                        <span class="param-unit">°C</span>
+                    </div>
+                    <div class="param-bar-wrap">
+                        <div class="param-bar-fill thermal" id="bar-coolant" style="width: 45%;"></div>
+                    </div>
+                    <div class="param-meta">
+                        <span class="support-badge" id="coolant-support">SUPPORTED</span>
+                        <span class="param-sub" id="coolant-status-label">Warmup Phase</span>
+                    </div>
+                </div>
+
+                <!-- Intake Air Temperature -->
+                <div class="param-card" id="card-iat">
+                    <div class="param-top">
+                        <span class="param-name">INTAKE AIR TEMP</span>
+                        <span class="param-pid">PID 0F</span>
+                    </div>
+                    <div class="param-main">
+                        <span class="param-value" id="val-iat">--</span>
+                        <span class="param-unit">°C</span>
+                    </div>
+                    <div class="param-bar-wrap">
+                        <div class="param-bar-fill" id="bar-iat" style="width: 30%;"></div>
+                    </div>
+                    <div class="param-meta">
+                        <span class="support-badge" id="iat-support">SUPPORTED</span>
+                        <span class="param-sub">Manifold Air Temp</span>
+                    </div>
+                </div>
+
+                <!-- Mass Air Flow -->
+                <div class="param-card" id="card-maf">
+                    <div class="param-top">
+                        <span class="param-name">MASS AIR FLOW</span>
+                        <span class="param-pid">PID 10</span>
+                    </div>
+                    <div class="param-main">
+                        <span class="param-value" id="val-maf">--</span>
+                        <span class="param-unit">g/s</span>
+                    </div>
+                    <div class="param-bar-wrap">
+                        <div class="param-bar-fill" id="bar-maf" style="width: 15%;"></div>
+                    </div>
+                    <div class="param-meta">
+                        <span class="support-badge" id="maf-support">SUPPORTED</span>
+                        <span class="param-sub">Fuel Mixture Input</span>
+                    </div>
+                </div>
+
+                <!-- Fuel Level -->
+                <div class="param-card" id="card-fuel">
+                    <div class="param-top">
+                        <span class="param-name">FUEL LEVEL</span>
+                        <span class="param-pid">PID 2F</span>
+                    </div>
+                    <div class="param-main">
+                        <span class="param-value" id="val-fuel">--</span>
+                        <span class="param-unit">%</span>
+                    </div>
+                    <div class="param-bar-wrap">
+                        <div class="param-bar-fill fuel" id="bar-fuel" style="width: 68%;"></div>
+                    </div>
+                    <div class="param-meta">
+                        <span class="support-badge" id="fuel-support">SUPPORTED</span>
+                        <span class="param-sub" id="fuel-sub-label">Tank Reservoir</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Real-Time Strip Chart Section -->
+            <section class="chart-section">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div class="chart-title-group">
+                            <span class="chart-title">REAL-TIME TELEMETRY TRACE</span>
+                            <span class="chart-subtitle">Last 60 Seconds Streaming (5 Hz)</span>
+                        </div>
+                        <div class="chart-legend">
+                            <div class="legend-item"><span class="legend-color color-speed"></span> Speed (km/h)</div>
+                            <div class="legend-item"><span class="legend-color color-rpm"></span> RPM (/50)</div>
+                            <div class="legend-item"><span class="legend-color color-throttle"></span> Throttle (%)</div>
+                            <div class="legend-item"><span class="legend-color color-load"></span> Load (%)</div>
+                        </div>
+                    </div>
+                    <div class="chart-canvas-container">
+                        <canvas id="canvas-stripchart" height="180"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Diagnostic Terminal Drawer / Modal -->
+        <div class="terminal-drawer" id="terminal-drawer">
+            <div class="terminal-header">
+                <div class="terminal-title">
+                    <span class="term-icon">📟</span>
+                    <span>DRIVESENSE OBD DIAGNOSTIC CONSOLE</span>
+                </div>
+                <div class="terminal-controls">
+                    <button class="btn-term-clear" id="btn-clear-term">Clear</button>
+                    <button class="btn-term-close" id="btn-close-term">✕</button>
+                </div>
+            </div>
+            <div class="terminal-body" id="terminal-output">
+                <div class="term-line sys">[SYSTEM] DriveSense AI Cockpit Interface Initialized.</div>
+                <div class="term-line sys">[SYSTEM] Web Bluetooth Protocol Version: 1.0.0</div>
+                <div class="term-line sys">[SYSTEM] Ready to connect to DriveSense_OBD peripheral.</div>
+            </div>
+            <div class="terminal-quick-bar">
+                <button class="btn-cmd" data-cmd="GET_DEVICE_INFO">GET_DEVICE_INFO</button>
+                <button class="btn-cmd" data-cmd="GET_SUPPORTED_PIDS">GET_SUPPORTED_PIDS</button>
+                <button class="btn-cmd" data-cmd="GET_CONNECTION_STATUS">GET_CONNECTION_STATUS</button>
+                <button class="btn-cmd" data-cmd="START_TELEMETRY">START_TELEMETRY</button>
+                <button class="btn-cmd" data-cmd="STOP_TELEMETRY">STOP_TELEMETRY</button>
+            </div>
+        </div>
+
+        <!-- Raw JSON Inspector Modal -->
+        <div class="modal-overlay" id="json-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Raw Telemetry JSON Packet</h3>
+                    <button class="modal-close" id="btn-close-json">✕</button>
+                </div>
+                <div class="modal-body">
+                    <pre><code id="raw-json-display">{ "status": "No packets received yet" }</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/ble-service.js"></script>
+    <script src="js/virtual-esp32.js"></script>
+    <script src="js/telemetry-state.js"></script>
+    <script src="js/gauges.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/ai-analytics.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

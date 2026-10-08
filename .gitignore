@@ -1,0 +1,15 @@
+# Binaries & Build artifacts
+test_runner
+*.o
+*.a
+*.so
+*.dylib
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
